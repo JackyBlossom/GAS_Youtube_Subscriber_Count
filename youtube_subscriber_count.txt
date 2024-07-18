@@ -1,0 +1,52 @@
+function getSubscriberCount() {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  const data = sheet.getDataRange().getValues();
+  
+  // ヘッダー行を追加（まだない場合）
+  if (data[0][0] !== 'Channel URL' || data[0][1] !== 'Channel Name' || data[0][2] !== 'Subscriber Count') {
+    sheet.getRange(1, 1, 1, 3).setValues([['Channel URL', 'Channel Name', 'Subscriber Count']]);
+    data.unshift(['Channel URL', 'Channel Name', 'Subscriber Count']);
+  }
+  
+  for (let i = 1; i < data.length; i++) {
+    const url = data[i][0];
+    if (!url) continue;
+    
+    const channelName = url.split('@')[1];
+    if (!channelName) continue;
+    
+    try {
+      const results = YouTube.Channels.list('snippet,statistics', {
+        forUsername: channelName
+      });
+      
+      if (results.items && results.items.length > 0) {
+        const actualChannelName = results.items[0].snippet.title;
+        const subscriberCount = results.items[0].statistics.subscriberCount;
+        sheet.getRange(i + 1, 2).setValue(actualChannelName);
+        sheet.getRange(i + 1, 3).setValue(subscriberCount);
+      } else {
+        // チャンネルが見つからない場合、ID検索を試みる
+        const idResults = YouTube.Channels.list('snippet,statistics', {
+          id: channelName
+        });
+        
+        if (idResults.items && idResults.items.length > 0) {
+          const actualChannelName = idResults.items[0].snippet.title;
+          const subscriberCount = idResults.items[0].statistics.subscriberCount;
+          sheet.getRange(i + 1, 2).setValue(actualChannelName);
+          sheet.getRange(i + 1, 3).setValue(subscriberCount);
+        } else {
+          sheet.getRange(i + 1, 2).setValue('チャンネルが見つかりません');
+          sheet.getRange(i + 1, 3).setValue('N/A');
+        }
+      }
+    } catch (e) {
+      sheet.getRange(i + 1, 2).setValue('エラー: ' + e.message);
+      sheet.getRange(i + 1, 3).setValue('N/A');
+    }
+    
+    // API制限を避けるために少し待機
+    Utilities.sleep(1000);
+  }
+}
